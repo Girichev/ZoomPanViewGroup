@@ -119,6 +119,23 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
         return true
     }
 
+//    private var transformationMatrix = Matrix()
+//
+//    override fun onScale(detector: ScaleGestureDetector): Boolean {
+//        mScale *= detector.scaleFactor
+//        val focusX = detector.focusX
+//        val focusY = detector.focusY
+//        transformationMatrix.postTranslate(-focusX, -focusY)
+//        transformationMatrix.postScale(detector.scaleFactor, detector.scaleFactor)
+//        val focusShiftX = focusX - lastFocusX
+//        val focusShiftY = focusY - lastFocusY
+//        transformationMatrix.postTranslate(focusX + focusShiftX, focusY + focusShiftY)
+//        lastFocusX = focusX
+//        lastFocusY = focusY
+//        postInvalidate()
+//        return true
+//    }
+
     override fun onScaleBegin(p0: ScaleGestureDetector): Boolean {
         isScale.set(true)
         lastFocusX = p0.focusX
@@ -153,17 +170,17 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     override fun dispatchDraw(canvas: Canvas) {
         canvas.save()
-        canvas.translate(xPos - lastFocusX, yPos - lastFocusY)
         val fX = lastFocusX
         val fY = lastFocusY
-        canvas.translate(-fX, -fY)
+        canvas.translate(xPos - fX, yPos - fY)
         canvas.scale(mScale, mScale)
         canvas.drawCircle((fX), (fY), 300 / mScale, Paint().apply {
             style = Paint.Style.FILL
             strokeWidth = 30f
             color = Color.rgb(0, 100, 0)
         })
-        canvas.translate(lastFocusDeltaX + fX, lastFocusDeltaY + fY)
+        super.dispatchDraw(canvas)
+        canvas.translate((lastFocusDeltaX + fX) / mScale, (lastFocusDeltaY + fY) / mScale)
         super.dispatchDraw(canvas)
         canvas.restore()
         debug(canvas)
