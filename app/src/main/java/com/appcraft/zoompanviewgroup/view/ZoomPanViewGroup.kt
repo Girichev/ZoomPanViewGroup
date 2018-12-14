@@ -153,17 +153,17 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     override fun dispatchDraw(canvas: Canvas) {
         canvas.save()
-        canvas.translate(xPos, yPos)
-        val fX = lastFocusX - xPos
-        val fY = lastFocusY - yPos
-//        canvas.translate(-fX, -fY)
+        canvas.translate(xPos - lastFocusX, yPos - lastFocusY)
+        val fX = lastFocusX
+        val fY = lastFocusY
+        canvas.translate(-fX, -fY)
         canvas.scale(mScale, mScale)
-//        canvas.drawCircle((fX), (fY), 300 / mScale, Paint().apply {
-//            style = Paint.Style.FILL
-//            strokeWidth = 30f
-//            color = Color.rgb(0, 100, 0)
-//        })
-//        canvas.translate(lastFocusDeltaX + fX, lastFocusDeltaY + fY)
+        canvas.drawCircle((fX), (fY), 300 / mScale, Paint().apply {
+            style = Paint.Style.FILL
+            strokeWidth = 30f
+            color = Color.rgb(0, 100, 0)
+        })
+        canvas.translate(lastFocusDeltaX + fX, lastFocusDeltaY + fY)
         super.dispatchDraw(canvas)
         canvas.restore()
         debug(canvas)
