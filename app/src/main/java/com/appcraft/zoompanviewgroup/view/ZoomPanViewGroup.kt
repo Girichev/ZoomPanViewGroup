@@ -32,9 +32,9 @@ fun ViewGroup.getAllChildren(v: View = this): List<View> {
 class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureListener,
     GestureDetector.OnGestureListener {
 
-    private val mScaleDetector: ScaleGestureDetector = ScaleGestureDetector(context, this)
-    private val mScrollDetector: GestureDetector = GestureDetector(context, this)
-    private val scroller: Scroller = Scroller(context)
+    private val mScaleDetector = ScaleGestureDetector(context, this)
+    private val mScrollDetector = GestureDetector(context, this)
+    private val scroller = Scroller(context)
 
     private var mLeft = 0.0f
     private var mTop = 0.0f
@@ -77,6 +77,7 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     override fun onShowPress(p0: MotionEvent?) {}
     override fun onLongPress(p0: MotionEvent?) {}
     override fun onDown(p0: MotionEvent?): Boolean {
+        if (!scroller.isFinished) scroller.abortAnimation()
         return true
     }
 
@@ -186,9 +187,6 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action and MotionEvent.ACTION_MASK == MotionEvent.ACTION_DOWN) {
-            if (!scroller.isFinished) scroller.abortAnimation()
-        }
         mScrollDetector.onTouchEvent(event)
         mScaleDetector.onTouchEvent(event)
         return true
