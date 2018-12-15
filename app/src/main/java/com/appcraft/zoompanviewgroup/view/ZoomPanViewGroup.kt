@@ -1,5 +1,6 @@
 package com.appcraft.zoompanviewgroup.view
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.PointF
@@ -76,14 +77,8 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     override fun onShowPress(p0: MotionEvent?) {}
     override fun onLongPress(p0: MotionEvent?) {}
-    override fun onDown(p0: MotionEvent?): Boolean {
-        if (!scroller.isFinished) scroller.abortAnimation()
-        return true
-    }
-
-    override fun onSingleTapUp(p0: MotionEvent?): Boolean {
-        return true
-    }
+    override fun onDown(p0: MotionEvent?) = true
+    override fun onSingleTapUp(p0: MotionEvent?) = true
 
     override fun onScaleEnd(p0: ScaleGestureDetector) {}
     override fun onScaleBegin(p0: ScaleGestureDetector): Boolean {
@@ -167,7 +162,7 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
             if (child.visibility != View.GONE) {
                 layoutComputationRect.apply {
                     child.getDrawingRect(this@apply)
-                    this@ZoomPanViewGroup.offsetDescendantRectToMyCoords(child, this)
+                    this@ZoomPanViewGroup.offsetDescendantRectToMyCoords(child, this@apply)
                     mLeft = Math.min(mLeft, this.left.toFloat())
                     mTop = Math.min(mTop, this.top.toFloat())
                     mRight = Math.max(mRight, this.right.toFloat())
@@ -177,16 +172,11 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
         }
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        getAllChildren().forEach { child ->
-            if (child.visibility != View.GONE) {
-                measureChild(child, widthMeasureSpec, heightMeasureSpec)
-            }
-        }
-    }
-
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action and MotionEvent.ACTION_MASK == MotionEvent.ACTION_DOWN) {
+            if (!scroller.isFinished) scroller.abortAnimation()
+        }
         mScrollDetector.onTouchEvent(event)
         mScaleDetector.onTouchEvent(event)
         return true
