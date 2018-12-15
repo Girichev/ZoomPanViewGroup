@@ -2,153 +2,153 @@ package com.appcraft.zoompanviewgroup.view
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
+import android.graphics.PointF
 import android.util.AttributeSet
-import android.view.GestureDetector
-import android.view.MotionEvent
-import android.view.ScaleGestureDetector
-import android.view.View
+import android.util.SizeF
+import android.view.*
 import android.widget.RelativeLayout
 import android.widget.Scroller
-import java.util.concurrent.atomic.AtomicBoolean
+import android.view.ViewGroup
 
+
+
+fun Float.clamped(min: Float, max: Float): Float {
+    return Math.max(min, Math.min(this, max))
+}
+
+fun ViewGroup.getAllChildren(v: View = this): List<View> {
+    if (v !is ViewGroup) {
+        val viewArrayList = ArrayList<View>()
+        viewArrayList.add(v)
+        return viewArrayList
+    }
+    val result = ArrayList<View>()
+    for (i in 0 until v.childCount) {
+        val child = v.getChildAt(i)
+        result.addAll(getAllChildren(child))
+    }
+    return result
+}
 
 class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureListener,
     GestureDetector.OnGestureListener {
+
     private val mScaleDetector: ScaleGestureDetector = ScaleGestureDetector(context, this)
     private val mScrollDetector: GestureDetector = GestureDetector(context, this)
     private val scroller: Scroller = Scroller(context)
 
-    private var contentWidth = 0f
-    private var contentHeight = 0f
-    private var mLeft = 0
-    private var mTop = 0
-    private var mRight = 0
-    private var mBottom = 0
+    private var contentWidth = 0.0f
+    private var contentHeight = 0.0f
 
-    private var xPos = 0f
-    private var yPos = 0f
+    private var offset = PointF(0.0f, 0.0f)
+    private var scale = 1.0f
 
-    private var lastFocusX: Float = 0f
-    private var lastFocusY: Float = 0f
+    private val maxOffset: PointF
+        get() = PointF(0.0f, 0.0f)
 
-    private var lastFocusDeltaX: Float = 0f
-    private var lastFocusDeltaY: Float = 0f
+    private val minOffset: PointF
+        get() = PointF(
+            Math.min(0.0f, (width - size.width)),
+            Math.min(0.0f, (height - size.height))
+        )
 
-    private var mScale = 1f
-
-    private val isScale = AtomicBoolean(false)
+    private val size: SizeF
+        get() = SizeF(
+            contentWidth * scale,
+            contentHeight * scale
+        )
 
     constructor(context: Context) : this(context, null)
-
     constructor(context: Context, attr: AttributeSet?) : super(context, attr)
-
     constructor(context: Context, attrs: AttributeSet, defStyleAttr: Int) : super(context, attrs, defStyleAttr)
+
+    companion object {
+        const val MIN_ZOOM = 1f
+    }
 
     init {
         setLayerType(View.LAYER_TYPE_NONE, null)
     }
 
-    private fun minX(): Int = Math.min(0, (width - contentWidth * mScale).toInt()).toInt()
-
-    private fun maxX(): Int = 0
-
-    private fun minY(): Int = Math.min(0, (height - contentHeight * mScale).toInt()).toInt()
-
-    private fun maxY(): Int = 0
-
-    override fun onShowPress(p0: MotionEvent?) {
-
+    override fun onShowPress(p0: MotionEvent?) {}
+    override fun onLongPress(p0: MotionEvent?) {}
+    override fun onDown(p0: MotionEvent?): Boolean {
+        return true
     }
 
     override fun onSingleTapUp(p0: MotionEvent?): Boolean {
         return true
     }
 
-    override fun onDown(p0: MotionEvent?): Boolean {
+    override fun onScaleEnd(p0: ScaleGestureDetector) {}
+    override fun onScaleBegin(p0: ScaleGestureDetector): Boolean {
         return true
-    }
-
-    override fun onLongPress(p0: MotionEvent?) {
-
     }
 
     override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
         scroller.fling(
-            (xPos).toInt(), (yPos).toInt(),
+            (offset.x).toInt(), (offset.y).toInt(),
             (velocityX).toInt(), (velocityY).toInt(),
-            (minX()), (maxX()),
-            (minY()), (maxY())
+            minOffset.x.toInt(), maxOffset.x.toInt(),
+            minOffset.y.toInt(), maxOffset.y.toInt()
         )
         return true
     }
 
-    // Scroll part >>>
-    // Scroll by finger
-    override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, distanceX: Float, distanceY: Float): Boolean {
-        xPos -= distanceX
-        yPos -= distanceY
-        if (xPos < minX()) xPos = minX().toFloat()
-        if (xPos > maxX()) xPos = maxX().toFloat()
-        if (yPos < minY()) yPos = minY().toFloat()
-        if (yPos > maxY()) yPos = maxY().toFloat()
-        if (isScale.get()) return true
-        postInvalidate()
-        return true
-    }
-
-    // Scroll by scroller
     override fun computeScroll() {
         if (scroller.computeScrollOffset()) {
-            xPos = scroller.currX.toFloat()
-            yPos = scroller.currY.toFloat()
-            postInvalidate()
+            offset.x = scroller.currX.toFloat()
+            offset.y = scroller.currY.toFloat()
+            redraw()
         }
     }
-    // Scroll part <<<
 
-    // Scale part >>>
+    override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, deltaX: Float, deltaY: Float): Boolean {
+        offset.x -= deltaX
+        offset.y -= deltaY
+        redraw()
+        return true
+    }
+
     override fun onScale(detector: ScaleGestureDetector): Boolean {
-        mScale *= detector.scaleFactor
-        lastFocusDeltaX = detector.focusX - lastFocusX
-        lastFocusDeltaY = detector.focusY - lastFocusY
-        lastFocusX = detector.focusX
-        lastFocusY = detector.focusY
+        scale *= detector.scaleFactor
+        return if (scale in MIN_ZOOM..10f) {
+            prepareToScale(detector.scaleFactor, PointF(detector.focusX, detector.focusY))
+            redraw()
+            true
+        } else {
+            scale = scale.clamped(MIN_ZOOM, 10f)
+            false
+        }
+    }
+
+    private fun prepareToScale(scaleBy: Float, focus: PointF) {
+        val widthGrowth = size.width * (scaleBy - 1)
+        val heightGrowth = size.height * (scaleBy - 1)
+
+        val canvasFocus = PointF(focus.x - offset.x, focus.y - offset.y)
+        val xFocusRelation = canvasFocus.x / size.width
+        val yFocusRelation = canvasFocus.y / size.height
+
+        offset.x -= widthGrowth * xFocusRelation
+        offset.y -= heightGrowth * yFocusRelation
+    }
+
+    private fun clampOffset() {
+        offset.x = offset.x.clamped(minOffset.x, maxOffset.x)
+        offset.y = offset.y.clamped(minOffset.y, maxOffset.y)
+    }
+
+    private fun redraw() {
+        clampOffset()
         postInvalidate()
-        return true
     }
 
-//    private var transformationMatrix = Matrix()
-//
-//    override fun onScale(detector: ScaleGestureDetector): Boolean {
-//        mScale *= detector.scaleFactor
-//        val focusX = detector.focusX
-//        val focusY = detector.focusY
-//        transformationMatrix.postTranslate(-focusX, -focusY)
-//        transformationMatrix.postScale(detector.scaleFactor, detector.scaleFactor)
-//        val focusShiftX = focusX - lastFocusX
-//        val focusShiftY = focusY - lastFocusY
-//        transformationMatrix.postTranslate(focusX + focusShiftX, focusY + focusShiftY)
-//        lastFocusX = focusX
-//        lastFocusY = focusY
-//        postInvalidate()
-//        return true
-//    }
-
-    override fun onScaleBegin(p0: ScaleGestureDetector): Boolean {
-        isScale.set(true)
-        lastFocusX = p0.focusX
-        lastFocusY = p0.focusY
-        lastFocusDeltaX = 0f
-        lastFocusDeltaY = 0F
-        return true
+    override fun dispatchDraw(canvas: Canvas) {
+        canvas.translate(offset.x, offset.y)
+        canvas.scale(scale, scale)
+        super.dispatchDraw(canvas)
     }
-
-    override fun onScaleEnd(p0: ScaleGestureDetector) {
-        isScale.set(false)
-    }
-    // Scale part <<<
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         super.onLayout(changed, left, top, right, bottom)
@@ -158,94 +158,10 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             if (child.visibility != View.GONE) {
-                mLeft = Math.min(mLeft, l)
-                mTop = Math.min(mTop, t)
-                mRight = Math.max(mRight, l + child.measuredWidth)
-                mBottom = Math.max(mBottom, t + child.measuredHeight)
                 contentWidth = Math.max(contentWidth, child.measuredWidth.toFloat())
                 contentHeight = Math.max(contentHeight, child.measuredHeight.toFloat())
             }
         }
-    }
-
-    override fun dispatchDraw(canvas: Canvas) {
-        canvas.save()
-        val fX = lastFocusX
-        val fY = lastFocusY
-        canvas.translate(xPos - fX, yPos - fY)
-        canvas.scale(mScale, mScale)
-        canvas.drawCircle((fX), (fY), 300 / mScale, Paint().apply {
-            style = Paint.Style.FILL
-            strokeWidth = 30f
-            color = Color.rgb(0, 100, 0)
-        })
-        super.dispatchDraw(canvas)
-        canvas.translate((lastFocusDeltaX + fX) / mScale, (lastFocusDeltaY + fY) / mScale)
-        super.dispatchDraw(canvas)
-        canvas.restore()
-        debug(canvas)
-    }
-
-    private fun debug(canvas: Canvas) {
-        canvas.drawLine((width / 2).toFloat(), 0f, (width / 2).toFloat(), height.toFloat(), Paint().apply {
-            color = Color.GREEN
-            strokeWidth = 1f
-        })
-        canvas.drawLine(0f, (height / 2).toFloat(), width.toFloat(), (height / 2).toFloat(), Paint().apply {
-            color = Color.GREEN
-            strokeWidth = 1f
-        })
-
-        val step = height / 60f
-        canvas.drawCircle((lastFocusX), (lastFocusY), step, Paint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-            color = Color.GREEN
-        })
-        canvas.drawText(mScale.toString(), step, step * 2, Paint().apply {
-            textSize = step
-            color = Color.YELLOW
-        })
-        canvas.drawText("width: $contentWidth, height: $contentHeight", step, step * 4, Paint().apply {
-            textSize = step
-            color = Color.WHITE
-        })
-        canvas.drawText(
-            "real width: ${contentWidth * mScale}, real height: ${contentHeight * mScale}",
-            step,
-            step * 6,
-            Paint().apply {
-                textSize = step
-                color = Color.WHITE
-            })
-        canvas.drawText(
-            "minX: ${minX()}, maxX: ${maxX()} minY: ${minY()}, maxY: ${maxY()}",
-            step,
-            step * 8,
-            Paint().apply {
-                textSize = step
-                color = Color.RED
-            })
-        canvas.drawText("xPos: $xPos, yPos: $yPos", step, step * 10, Paint().apply {
-            textSize = step
-            color = Color.WHITE
-        })
-        canvas.drawText(
-            "lastFocusX: $lastFocusX ($lastFocusDeltaX), lastFocusY: $lastFocusY ($lastFocusDeltaY)",
-            step,
-            step * 12,
-            Paint().apply {
-                textSize = step
-                color = Color.RED
-            })
-        canvas.drawText(
-            "mLeft: $mLeft, mTop: $mTop, mRight: $mRight, mBottom: $mBottom",
-            step,
-            step * 14,
-            Paint().apply {
-                textSize = step
-                color = Color.GREEN
-            })
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
