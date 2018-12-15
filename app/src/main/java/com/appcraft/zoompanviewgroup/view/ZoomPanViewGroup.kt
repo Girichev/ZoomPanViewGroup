@@ -3,13 +3,12 @@ package com.appcraft.zoompanviewgroup.view
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.PointF
+import android.graphics.Rect
 import android.util.AttributeSet
 import android.util.SizeF
 import android.view.*
 import android.widget.RelativeLayout
 import android.widget.Scroller
-import android.view.ViewGroup
-
 
 
 fun Float.clamped(min: Float, max: Float): Float {
@@ -37,14 +36,18 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     private val mScrollDetector: GestureDetector = GestureDetector(context, this)
     private val scroller: Scroller = Scroller(context)
 
-    private var contentWidth = 0.0f
-    private var contentHeight = 0.0f
+    private var mLeft = 0.0f
+    private var mTop = 0.0f
+    private var mRight = 0.0f
+    private var mBottom = 0.0f
 
     private var offset = PointF(0.0f, 0.0f)
     private var scale = 1.0f
 
+    private val layoutComputationRect = Rect()
+
     private val maxOffset: PointF
-        get() = PointF(0.0f, 0.0f)
+        get() = PointF(-mLeft * scale, -mTop * scale)
 
     private val minOffset: PointF
         get() = PointF(
@@ -54,8 +57,8 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     private val size: SizeF
         get() = SizeF(
-            contentWidth * scale,
-            contentHeight * scale
+            mRight * scale,
+            mBottom * scale
         )
 
     constructor(context: Context) : this(context, null)
@@ -64,6 +67,7 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     companion object {
         const val MIN_ZOOM = 1f
+        const val MAX_ZOOM = 10f
     }
 
     init {
@@ -112,12 +116,12 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     override fun onScale(detector: ScaleGestureDetector): Boolean {
         scale *= detector.scaleFactor
-        return if (scale in MIN_ZOOM..10f) {
+        return if (scale in MIN_ZOOM..MAX_ZOOM) {
             prepareToScale(detector.scaleFactor, PointF(detector.focusX, detector.focusY))
             redraw()
             true
         } else {
-            scale = scale.clamped(MIN_ZOOM, 10f)
+            scale = scale.clamped(MIN_ZOOM, MAX_ZOOM)
             false
         }
     }
@@ -145,30 +149,36 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     }
 
     override fun dispatchDraw(canvas: Canvas) {
+        canvas.save()
         canvas.translate(offset.x, offset.y)
         canvas.scale(scale, scale)
         super.dispatchDraw(canvas)
+        canvas.restore()
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        super.onLayout(changed, left, top, right, bottom)
-        val childCount = childCount
-        contentWidth = 0f
-        contentHeight = 0f
-        for (i in 0 until childCount) {
-            val child = getChildAt(i)
+        super.onLayout(changed, l, t, r, b)
+        mLeft = l.toFloat()
+        mTop = t.toFloat()
+        mRight = 0f
+        mBottom = 0f
+        getAllChildren().forEach { child ->
             if (child.visibility != View.GONE) {
-                contentWidth = Math.max(contentWidth, child.measuredWidth.toFloat())
-                contentHeight = Math.max(contentHeight, child.measuredHeight.toFloat())
+                layoutComputationRect.apply {
+                    child.getDrawingRect(this@apply)
+                    this@ZoomPanViewGroup.offsetDescendantRectToMyCoords(child, this)
+                    mLeft = Math.min(mLeft, this.left.toFloat())
+                    mTop = Math.min(mTop, this.top.toFloat())
+                    mRight = Math.max(mRight, this.right.toFloat())
+                    mBottom = Math.max(mBottom, this.bottom.toFloat())
+                }
             }
         }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        val childCount = childCount
-        for (i in 0 until childCount) {
-            val child = getChildAt(i)
+        getAllChildren().forEach { child ->
             if (child.visibility != View.GONE) {
                 measureChild(child, widthMeasureSpec, heightMeasureSpec)
             }
