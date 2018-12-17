@@ -17,17 +17,12 @@ fun Float.clamped(min: Float, max: Float): Float {
 }
 
 fun ViewGroup.getAllChildren(v: View = this): List<View> {
-    if (v !is ViewGroup) {
-        val viewArrayList = ArrayList<View>()
-        viewArrayList.add(v)
-        return viewArrayList
+    return if (v !is ViewGroup) ArrayList<View>(1).apply { add(v) }
+    else ArrayList<View>().apply {
+        for (i in 0 until v.childCount) {
+            addAll(getAllChildren(getChildAt(i)))
+        }
     }
-    val result = ArrayList<View>()
-    for (i in 0 until v.childCount) {
-        val child = v.getChildAt(i)
-        result.addAll(getAllChildren(child))
-    }
-    return result
 }
 
 class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureListener,
@@ -81,9 +76,7 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     override fun onSingleTapUp(p0: MotionEvent?) = true
 
     override fun onScaleEnd(p0: ScaleGestureDetector) {}
-    override fun onScaleBegin(p0: ScaleGestureDetector): Boolean {
-        return true
-    }
+    override fun onScaleBegin(p0: ScaleGestureDetector) = true
 
     override fun onFling(e1: MotionEvent?, e2: MotionEvent?, velocityX: Float, velocityY: Float): Boolean {
         scroller.fling(
@@ -111,15 +104,14 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     }
 
     override fun onScale(detector: ScaleGestureDetector): Boolean {
-        scale *= detector.scaleFactor
-        return if (scale in MIN_ZOOM..MAX_ZOOM) {
-            prepareToScale(detector.scaleFactor, PointF(detector.focusX, detector.focusY))
-            redraw()
-            true
-        } else {
-            scale = scale.clamped(MIN_ZOOM, MAX_ZOOM)
-            false
+        (scale * detector.scaleFactor).let {
+            if (it in MIN_ZOOM..MAX_ZOOM) {
+                prepareToScale(detector.scaleFactor, PointF(detector.focusX, detector.focusY))
+                scale = it
+                redraw()
+            }
         }
+        return true
     }
 
     private fun prepareToScale(scaleBy: Float, focus: PointF) {
