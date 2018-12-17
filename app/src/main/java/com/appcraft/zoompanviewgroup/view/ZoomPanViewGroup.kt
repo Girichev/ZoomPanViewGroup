@@ -46,20 +46,26 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
 
     private val maxOffset: PointF
         get() = PointF(
-            Math.max(0.0f, (width - size.width - mLeft)),
-            Math.max(0.0f, (height - size.height - mTop))
+            xOffset + Math.max(0f, (size.width - width) / 2),
+            yOffset + Math.max(0f, (size.height - height) / 2)
         )
 
     private val minOffset: PointF
         get() = PointF(
-            Math.min(0.0f, (width - size.width - mLeft)),
-            Math.min(0.0f, (height - size.height - mTop))
+            xOffset - Math.max(0f, (size.width - width) / 2),
+            yOffset - Math.max(0f, (size.height - height) / 2)
         )
+
+    private val xOffset
+        get() = (width / 2) - (size.width / 2) - (mLeft * scale)
+
+    private val yOffset
+        get() = (height / 2) - (size.height / 2) - (mTop * scale)
 
     private val size: SizeF
         get() = SizeF(
-            mRight * scale,
-            mBottom * scale
+            (mRight - mLeft) * scale,
+            (mBottom - mTop) * scale
         )
 
     constructor(context: Context) : this(context, null)
@@ -79,12 +85,19 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     override fun onLongPress(p0: MotionEvent?) {}
     override fun onDown(p0: MotionEvent?) = true
     override fun onSingleTapUp(p0: MotionEvent): Boolean {
-        clickListener?.get()?.onClick(p0.x, p0.y)
-        lastClick.x = p0.x
-        lastClick.y = p0.y
+        with(motionEventToCoords(p0)) {
+            lastClick.x = x
+            lastClick.y = y
+            clickListener?.get()?.onClick(this)
+        }
         redraw()
         return true
     }
+
+    private fun motionEventToCoords(motionEvent: MotionEvent) = PointF(
+        motionEvent.x / scale - mLeft - offset.x / scale,
+        motionEvent.y / scale - mTop - offset.y / scale
+    )
 
     override fun onScaleEnd(p0: ScaleGestureDetector) {}
     override fun onScaleBegin(p0: ScaleGestureDetector) = true
@@ -153,16 +166,37 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
         canvas.scale(scale, scale)
         super.dispatchDraw(canvas)
         canvas.restore()
+        debug(canvas)
+    }
+
+    private fun debug(canvas: Canvas) {
         val step = height / 60f
 
-        canvas.drawText("mLeft: $mLeft, mTop: $mTop, mRight: $mRight, mBottom: $mBottom", step, step * 2, Paint().apply {
-            textSize = step
+        canvas.drawLine((width / 2).toFloat(), 0f, (width / 2).toFloat(), height.toFloat(), Paint().apply {
             color = Color.GREEN
+            strokeWidth = 3f
         })
-        canvas.drawText("MIN_X: ${minOffset.x}, MAX_X: ${maxOffset.x}, MIN_Y: ${minOffset.y} MAX_Y: ${maxOffset.y}", step, step * 4, Paint().apply {
-            textSize = step
+        canvas.drawLine(0f, (height / 2).toFloat(), width.toFloat(), (height / 2).toFloat(), Paint().apply {
             color = Color.GREEN
+            strokeWidth = 3f
         })
+
+        canvas.drawText(
+            "mLeft: $mLeft, mTop: $mTop, mRight: $mRight, mBottom: $mBottom",
+            step,
+            step * 2,
+            Paint().apply {
+                textSize = step
+                color = Color.GREEN
+            })
+        canvas.drawText(
+            "MIN_X: ${minOffset.x}, MAX_X: ${maxOffset.x}, MIN_Y: ${minOffset.y} MAX_Y: ${maxOffset.y}",
+            step,
+            step * 4,
+            Paint().apply {
+                textSize = step
+                color = Color.GREEN
+            })
         canvas.drawText("X: ${offset.x}, Y: ${offset.y}", step, step * 6, Paint().apply {
             textSize = step
             color = Color.GREEN
@@ -204,8 +238,8 @@ class ZoomPanViewGroup : RelativeLayout, ScaleGestureDetector.OnScaleGestureList
     }
 
     interface OnClickListener {
-        fun onClick(x: Float, y: Float)
-        fun onDoubleTap(x: Float, y: Float)
-        fun onLongPress(x: Float, y: Float)
+        fun onClick(point: PointF)
+        fun onDoubleTap(point: PointF)
+        fun onLongPress(point: PointF)
     }
 }
